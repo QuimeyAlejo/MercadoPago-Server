@@ -1,37 +1,52 @@
 import client from "../services/mercadoPagoServices.js";
 import { Preference } from "mercadopago";
 
-export const createCheckout = async (req,res) => {
+const failed = "http://localhost:5173/failedpurchase"
+const success = "http://localhost:5173/successfullpurchase"
+export const createCheckout = async (req, res) => {
     try {
-        const {items} = req.body;
+        const { items, orderId, payerEmail } = req.body;
+
+        if (!items || items.length === 0) {
+            return res.status(400).json({ error: "No se enviaron items" });
+        }
 
         const preference = new Preference(client);
+
         const result = await preference.create({
             body: {
                 items: items.map(item => ({
                     title: item.title,
                     quantity: Number(item.quantity),
-                    unit_price: Number(item.price),
-                    currency_id : "ARS"
+                    unit_price: Number(item.unit_price),
+                    picture_url: item.picture_url,
+                    currency_id: "ARS"
                 })),
-                back_urls: {
-                    success: "saliojoya.com",
-                    pending: "estoyesperando.com",
-                    failure: "falle.com"
+                payer: {
+                    email: payerEmail
                 },
-                auto_return: 'approved',
-                notification_url: "webhook",
+                external_reference: String(orderId),
+                back_urls: {
+                    success: success,
+                    pending: "https://estoyesperando.com",
+                    failure: failed
+                },
+                auto_return: "approved",
+                notification_url: "https://tuservidor.com/webhook",
                 binary_mode: true
             }
         });
+
         return res.json({
-            checkout_url: result.init_point
-        })
+            checkout_url: result.init_point,
+            preference_id: result.id
+        });
+
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: "error creando el preference"})
+        console.error("ERROR MP:", error);
+        return res.status(500).json({ error: "error creando el preference" });
     }
-}
+};
 
 
 export const testCheckout = async (req, res) => {
