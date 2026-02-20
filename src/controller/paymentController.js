@@ -1,8 +1,8 @@
 import client from "../services/mercadoPagoServices.js";
 import { Preference } from "mercadopago";
 
-const failed = "http://localhost:5173/failedpurchase"
-const success = "http://localhost:5173/successfullpurchase"
+const fallo = "http://localhost:5173/failedpurchase"
+const exito = "http://localhost:5173/successfullpurchase"
 export const createCheckout = async (req, res) => {
     try {
         const { items, orderId, payerEmail } = req.body;
@@ -18,7 +18,7 @@ export const createCheckout = async (req, res) => {
                 items: items.map(item => ({
                     title: item.title,
                     quantity: Number(item.quantity),
-                    unit_price: Number(item.unit_price),
+                    unit_price: Number(item.unitPrice),
                     picture_url: item.picture_url,
                     currency_id: "ARS"
                 })),
@@ -26,20 +26,20 @@ export const createCheckout = async (req, res) => {
                     email: payerEmail
                 },
                 external_reference: String(orderId),
-                back_urls: {
-                    success: success,
-                    pending: "https://estoyesperando.com",
-                    failure: failed
-                },
-                auto_return: "approved",
-                notification_url: "https://tuservidor.com/webhook",
-                binary_mode: true
+          back_urls: {
+    success: exito,
+    pending: "https://estoyesperando.com",
+    failure: fallo
+},
+            binary_mode: true
             }
+            
         });
-
+            console.log("datovich",req.body)
+            console.log("RESULT MP:", result);
         return res.json({
-            checkout_url: result.init_point,
-            preference_id: result.id
+            checkoutUrl: result.init_point,
+            preferenceId: result.id
         });
 
     } catch (error) {
