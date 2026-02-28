@@ -1,5 +1,7 @@
 import client from "../services/mercadoPagoServices.js";
-import { Preference } from "mercadopago";
+import { Preference, Payment  } from "mercadopago";
+import { generateKeysForOrder } from "../services/keyGeneration.js";
+import { sendEmailFromBackend } from "../services/nodeMailer.js";
 
 const fallo = "http://localhost:5173/failedpurchase"
 const exito = "http://localhost:5173/successfullpurchase"
@@ -27,10 +29,12 @@ export const createCheckout = async (req, res) => {
                 },
                 external_reference: String(orderId),
           back_urls: {
-    success: exito,
-    pending: "https://estoyesperando.com",
+                    success: "http://localhost:5173/successfullpurchase",
+                    //success: "https://www.youtube.com/watch?v=kXMpu07zjN4&list=PLQxX2eiEaqbwnzKnmqHDl0rkRvp_T7Q_W&index=29",
+                    pending: "https://estoyesperando.com",
     failure: fallo
 },
+              //  auto_return:"approved",  // no funciona si las rutas de redirecion son localhost
             binary_mode: true
             }
             
@@ -49,51 +53,57 @@ export const createCheckout = async (req, res) => {
 };
 
 
-export const testCheckout = async (req, res) => {
-    try {
-        const preference = new Preference(client);
+ export const confirmPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.body;
 
-        const result = await preference.create({
-            body: {
-                items: [
-                    {
-                        title: "Zapatillas deportivas",
-                        quantity: 1,
-                        unit_price: 25000,
-                        description: "zapas"
-                      },
-                      {
-                        title: "Remera estampada",
-                        quantity: 2,
-                        unit_price: 8000,
-                         description: "remera"
-                      },
-                      {
-                        title: "Gorra negra",
-                        quantity: 1,
-                        unit_price: 6000,
-                         description: "gorra"
-                      }
-                ],
-                back_urls: {
-                    success: "https://www.google.com",
-                    failure: "https://www.youtube.com",
-                    pending: "https://www.google.com"
-                },
-                auto_return: "approved",
-                notification_url: "https://webhook.site/tu-url-de-prueba", // Para testear
-                binary_mode: true
-            }
-        });
-        
-        console.log(JSON.stringify(result, null, 2))
-        return res.json({
-            checkout_url: result.init_point,
-        });
-
-    } catch (error) {
-        console.error("Error creando preferencia:", error);
-        return res.status(500).json({ error: "No se pudo crear la preferencia" });
+    if (!paymentId) {
+      return res.status(400).json({ error: "paymentId requerido" });
     }
-};
 
+    const payment = new Payment(client);
+    const result = await payment.get({ id: paymentId });
+
+    const paymentData = result.body;
+
+    console.log("Consulta pago:", paymentData);
+
+    if (paymentData.status !== "approved") {
+      return res.json({ approved: false });
+    }
+
+    
+    const orderId = paymentData.external_reference;
+
+    
+    // const order = await Order.findById(orderId);
+
+  
+    const demoItems = [
+      { title: "Demo Game", quantity: 1 }
+    ];
+
+    const keys = generateKeysForOrder(demoItems);
+
+    const keysText = keys
+      .map(game =>
+        `🎮 ${game.name}\n${game.keys.join("\n")}`
+      )
+      .join("\n\n");
+
+    await sendEmailFromBackend(
+      paymentData.payer.email,
+      keysText
+    );
+
+    return res.json({
+      approved: true,
+      amount: paymentData.transaction_amount,
+      payerEmail: paymentData.payer.email,
+    });
+
+  } catch (error) {
+    console.error("Error confirmando pago:", error);
+    return res.status(500).json({ error: "Error confirmando pago" });
+  }
+};
